@@ -5,6 +5,7 @@ import "context"
 type Dao interface {
 	GetSourceType() string
 	GetModelType() string
+	GetDataName() string
 	Register() error
 	CreateDao() Dao
 	Transaction(ctx *context.Context, dataSource interface{}, txFunc func(dataSource interface{}) error) error

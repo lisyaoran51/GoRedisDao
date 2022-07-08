@@ -77,3 +77,7 @@ func (c *DaoImpl) GetModelType() string {
 	model := &model.CandleModel{}
 	return reflect.TypeOf(model).String()
 }
+
+func (c *DaoImpl) GetDataName() string {
+	return "candle"
+}

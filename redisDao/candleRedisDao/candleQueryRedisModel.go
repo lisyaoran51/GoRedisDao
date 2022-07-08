@@ -1,6 +1,7 @@
 package candleRedisDao
 
 import (
+	"encoding/json"
 	"reflect"
 	"time"
 
@@ -97,11 +98,19 @@ func (c *CandleQueryRedisModel) GetKey() string {
 		}
 		value := v.Field(i).Interface()
 
+		if t, ok := value.(time.Time); ok {
+			value = t.Unix()
+		}
+		if t, ok := value.(*time.Time); ok {
+			value = t.Unix()
+		}
+
 		if key != "" {
 			key += ":"
 		}
 
-		key += tag + ":" + value
+		valueMarshalled, _ := json.Marshal(value)
+		key += tag + ":" + string(valueMarshalled)
 	}
 	return key
 }

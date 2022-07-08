@@ -24,11 +24,6 @@ func NewCandleRedisDao() *CandleRedisDao {
 	return newDao
 }
 
-func (c *CandleRedisDao) GetDBName() string {
-	dbName := "candle"
-	return dbName
-}
-
 func (c *CandleRedisDao) new(ctx context.Context, rdb *redisDao.CompositeRedis, model *model.CandleModel) (interface{}, error) {
 
 	result, err := c.DeepNew(ctx, rdb.DB, model)
@@ -60,11 +55,15 @@ func (c *CandleRedisDao) new(ctx context.Context, rdb *redisDao.CompositeRedis, 
 
 func (c *CandleRedisDao) get(ctx context.Context, rdb *redisDao.CompositeRedis, query *CandleQueryRedisModel) (*model.CandleModel, error) {
 
-	key := c.GetDBName() + ":" + query.GetKey() + ":1"
+	key := c.GetDataName() + ":" + query.GetKey() + ":1"
 
 	result, err := rdb.Redis.Get(ctx, key).Result()
 
 	var model *model.CandleModel
+
+	if err != nil && err != redis.Nil {
+		return nil, err
+	}
 
 	if err == redis.Nil {
 		// go to db
@@ -84,10 +83,6 @@ func (c *CandleRedisDao) get(ctx context.Context, rdb *redisDao.CompositeRedis, 
 		}
 	}
 
-	if err != nil && err != redis.Nil {
-		return nil, err
-	}
-
 	return model, nil
 }
 
@@ -95,7 +90,7 @@ func (c *CandleRedisDao) gets(ctx context.Context, rdb *redisDao.CompositeRedis,
 
 	var models []*model.CandleModel
 
-	key := c.GetDBName() + ":" + query.GetKey()
+	key := c.GetDataName() + ":" + query.GetKey()
 
 	result, err := rdb.Redis.Get(ctx, key).Result()
 
@@ -124,6 +119,18 @@ func (c *CandleRedisDao) modify(ctx context.Context, rdb *redisDao.CompositeRedi
 	err := c.DeepModify(ctx, rdb.DB, model, fields)
 
 	//delete cache
+	c.Clean(ctx, &rdb.Redis, func(keys []string) []string {
+
+		selectedKeys := []string{}
+
+		for _, k := range keys {
+			if strings.Contains(k, model.Symbol) {
+				selectedKeys = append(selectedKeys, k)
+			}
+		}
+
+		return selectedKeys
+	})
 
 	return err
 }
@@ -133,6 +140,22 @@ func (c *CandleRedisDao) delete(ctx context.Context, rdb *redisDao.CompositeRedi
 	err := c.DeepDelete(ctx, rdb.DB, query)
 
 	//delete cache
+	if query.Symbol == nil {
+		return err
+	}
+
+	c.Clean(ctx, &rdb.Redis, func(keys []string) []string {
+
+		selectedKeys := []string{}
+
+		for _, k := range keys {
+			if strings.Contains(k, *query.Symbol) {
+				selectedKeys = append(selectedKeys, k)
+			}
+		}
+
+		return selectedKeys
+	})
 
 	return err
 }
@@ -218,6 +241,9 @@ func (c *CandleRedisDao) GetQueryModel() candleDao.CandleQueryModel {
 func (c *CandleRedisDao) DeepNew(ctx context.Context, dataSource interface{}, model *model.CandleModel) (interface{}, error) {
 
 	dao := candleDao.GetDao(dataSource)
+	if dao == nil {
+		return nil, nil
+	}
 
 	result, err := dao.New(ctx, dataSource, model)
 
@@ -227,6 +253,9 @@ func (c *CandleRedisDao) DeepNew(ctx context.Context, dataSource interface{}, mo
 func (c *CandleRedisDao) DeepGet(ctx context.Context, dataSource interface{}, query *CandleQueryRedisModel) (*model.CandleModel, error) {
 
 	dao := candleDao.GetDao(dataSource)
+	if dao == nil {
+		return nil, nil
+	}
 
 	result, err := dao.Get(ctx, dataSource, query)
 
@@ -236,6 +265,9 @@ func (c *CandleRedisDao) DeepGet(ctx context.Context, dataSource interface{}, qu
 func (c *CandleRedisDao) DeepGets(ctx context.Context, dataSource interface{}, query *CandleQueryRedisModel) ([]*model.CandleModel, error) {
 
 	dao := candleDao.GetDao(dataSource)
+	if dao == nil {
+		return nil, nil
+	}
 
 	result, err := dao.Gets(ctx, dataSource, query)
 
@@ -245,6 +277,9 @@ func (c *CandleRedisDao) DeepGets(ctx context.Context, dataSource interface{}, q
 func (c *CandleRedisDao) DeepModify(ctx context.Context, dataSource interface{}, model *model.CandleModel, fields []candleDao.CandleUpdateField) error {
 
 	dao := candleDao.GetDao(dataSource)
+	if dao == nil {
+		return nil
+	}
 
 	err := dao.Modify(ctx, dataSource, model, fields)
 
@@ -254,6 +289,9 @@ func (c *CandleRedisDao) DeepModify(ctx context.Context, dataSource interface{},
 func (c *CandleRedisDao) DeepDelete(ctx context.Context, dataSource interface{}, query *CandleQueryRedisModel) error {
 
 	dao := candleDao.GetDao(dataSource)
+	if dao == nil {
+		return nil
+	}
 
 	err := dao.Delete(ctx, dataSource, query)
 
