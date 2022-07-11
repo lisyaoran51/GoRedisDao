@@ -61,6 +61,10 @@ func (r *RedisDaoImpl) Transaction(ctx *context.Context, dataSource interface{},
 
 func (r *RedisDaoImpl) transaction(ctx *context.Context, rdb *CompositeRedis, txFunc func(dataSource interface{}) error) error {
 
+	// directly go to deep transaction since redis has no transaction
+	// delete all related cache
+	// may need to provide a way to clean specific cache
+
 	return nil
 }
 
@@ -118,13 +122,14 @@ func (r *RedisDaoImpl) GetKeys(ctx context.Context, rdb *redis.Client) ([]string
 
 func (r *RedisDaoImpl) CleanKeys(ctx context.Context, rdb *redis.Client, keys []string) error {
 
-	keysString, err := rdb.Get(ctx, r.GetKeysStringKey()).Result()
+	_, err := rdb.Del(ctx, r.GetKeysStringKey()).Result()
 	if err != nil && err != redis.Nil {
-		return nil, err
+		return err
 	}
 
-	if err == redis.Nil {
-
+	_, err = rdb.Del(ctx, r.GetKeysSetKey()).Result()
+	if err != nil && err != redis.Nil {
+		return err
 	}
 
 	return nil
@@ -133,6 +138,10 @@ func (r *RedisDaoImpl) CleanKeys(ctx context.Context, rdb *redis.Client, keys []
 func (r *RedisDaoImpl) Clean(ctx context.Context, rdb *redis.Client, selectFunc func([]string) []string) error {
 
 	keys, err := r.Dao.(RedisDao).GetKeys(ctx, rdb)
+	if err != nil {
+		return err
+	}
+
 	keys = selectFunc(keys)
 
 	r.CleanKeys(ctx, rdb, keys)
@@ -145,6 +154,11 @@ func (r *RedisDaoImpl) Clean(ctx context.Context, rdb *redis.Client, selectFunc 
 
 		if result < int64(len(keys)) {
 			// add some warning..
+		}
+
+		_, err = rdb.SRem(ctx, r.GetKeysSetKey(), k).Result()
+		if err != nil {
+			return err
 		}
 	}
 	return nil
